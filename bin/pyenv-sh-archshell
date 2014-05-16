@@ -60,11 +60,11 @@ platform=$(uname -s)
 if [[ $platform == "Linux" ]]; then
   system_arch=$(uname -m 2>/dev/null)
   [[ $system_arch == x86_64 ]] && system_bits="64-bit" || system_bits="32-bit"
-  python_arch=$(file -L `pyenv prefix`/bin/python | grep -oE "(32|64)-bit" 2>/dev/null)
+  python_bits=$(file -L `pyenv prefix`/bin/python | grep -oE "(32|64)-bit" 2>/dev/null)
+  #echo "SYSTEM: $system_arch, SYSTEM_BITS, $system_bits, PYTHON: $python_bits" >&2
 
-  echo "SYSTEM: $system_arch, SYSTEM_BITS, $system_bits, PYTHON: $python_arch" >&2
   # architectures differ, we are going to need an LD_LIBRARY_PATH
-  if [[ $system_bits != $python_bits ]]; then
+  if [[ "$system_bits" != "$python_bits" ]]; then
     # only update the *LIBRARY_PATH variables if they do not already have the
     # necessary paths
     if [[ ${LD_LIBRARY_PATH#*$(pyenv prefix)/lib} == ${LD_LIBRARY_PATH} ]]; then
@@ -79,15 +79,13 @@ if [[ $platform == "Linux" ]]; then
         ;;
       esac
     fi
-  elif [[ -n "${PYENV_PREVIOUS_LD_LIBRARY_PATH}" ]]; then
-    echo "reseting LD_LIBRARY_PATH" >&2
+  elif [[ -n "${LD_LIBRARY_PATH}" ]]; then
     case "$shell" in
     fish )
       echo "setenv LD_LIBRARY_PATH=${PYENV_PREVIOUS_LD_LIBRARY_PATH}"
       echo "set -e PYENV_PREVIOUS_LD_LIBRARY_PATH"
       ;;
     * )
-      echo "GERE" >&2
       echo "export LD_LIBRARY_PATH=${PYENV_PREVIOUS_LD_LIBRARY_PATH}"
       echo "unset PYENV_PREVIOUS_LD_LIBRARY_PATH"
       ;;
