@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#
+# Summary: Set or show the shell-specific Python version, adding LD_LIBRARY_PATH to environment
+#
+# Usage: pyenv shell <version>
+#        pyenv shell --unset
+#
+# Sets a shell-specific Python version by setting the `PYENV_VERSION'
+# environment variable in your shell. This version overrides local
+# application-specific versions and the global version.
+#
+# If on linux, and the host's architecture differs from that for which the
+# python version was configured, the `LD_LIBRARY_PATH` will be adjusted so
+# that executables which try to dynamically link against this version will
+# work.
+#
+# <version> should be a string matching a Python version known to pyenv.
+# The special version string `system' will use your default system Python.
+# Run `pyenv versions' for a list of available Python versions.
+
+set -e
+[ -n "$PYENV_DEBUG" ] && set -x
+
+# Provide pyenv completions
+if [ "$1" = "--complete" ]; then
+  echo --unset
+  echo system
+  exec pyenv-versions --bare
+fi
+
+versions=("$@")
+shell="$(basename "${PYENV_SHELL:-$SHELL}")"
+
+if [ -z "$versions" ]; then
+  if [ -z "$PYENV_VERSION" ]; then
+    echo "pyenv: no shell-specific version configured" >&2
+    exit 1
+  else
+    echo "echo \"\$PYENV_VERSION\""
+    exit
+  fi
+fi
+
+# let's eval the regular pyenv-sh-shell so that we have PYENV_VERSION
+# correctly set up.
+eval "`pyenv sh-shell "$@"`"
+
+# echo the PYENV_VERSION which is determined by pyenv-sh-shell
+case "$shell" in
+fish )
+  echo "setenv PYENV_VERSION=${PYENV_VERSION}"
+  ;;
+* )
+  echo "export PYENV_VERSION=${PYENV_VERSION}"
+  ;;
+esac
+
+echo $(pyenv version) >&2
+platform=$(uname -s)
+if [[ $platform == "Linux" ]]; then
+  system_arch=$(uname -m 2>/dev/null)
+  [[ $system_arch == x86_64 ]] && system_bits="64-bit" || system_bits="32-bit"
+  python_arch=$(file -L `pyenv prefix`/bin/python | grep -oE "(32|64)-bit" 2>/dev/null)
+
+  echo "SYSTEM: $system_arch, SYSTEM_BITS, $system_bits, PYTHON: $python_arch" >&2
+  # architectures differ, we are going to need an LD_LIBRARY_PATH
+  if [[ $system_bits != $python_bits ]]; then
+    # only update the *LIBRARY_PATH variables if they do not already have the
+    # necessary paths
+    if [[ ${LD_LIBRARY_PATH#*$(pyenv prefix)/lib} == ${LD_LIBRARY_PATH} ]]; then
+      case "$shell" in
+      fish )
+        echo "setenv PYENV_PREVIOUS_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+        echo "setenv LD_LIBRARY_PATH=$(pyenv prefix)/lib:${LD_LIBRARY_PATH}"
+        ;;
+      *)
+        echo "export PYENV_PREVIOUS_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+        echo "export LD_LIBRARY_PATH=$(pyenv prefix)/lib:${LD_LIBRARY_PATH}"
+        ;;
+      esac
+    fi
+  elif [[ -n "${PYENV_PREVIOUS_LD_LIBRARY_PATH}" ]]; then
+    echo "reseting LD_LIBRARY_PATH" >&2
+    case "$shell" in
+    fish )
+      echo "setenv LD_LIBRARY_PATH=${PYENV_PREVIOUS_LD_LIBRARY_PATH}"
+      echo "set -e PYENV_PREVIOUS_LD_LIBRARY_PATH"
+      ;;
+    * )
+      echo "GERE" >&2
+      echo "export LD_LIBRARY_PATH=${PYENV_PREVIOUS_LD_LIBRARY_PATH}"
+      echo "unset PYENV_PREVIOUS_LD_LIBRARY_PATH"
+      ;;
+    esac
+  fi
+fi
