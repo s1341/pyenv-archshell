@@ -57,6 +57,7 @@ esac
 
 echo $(pyenv version) >&2
 platform=$(uname -s)
+
 if [[ $platform == "Linux" ]]; then
   system_arch=$(uname -m 2>/dev/null)
   [[ $system_arch == x86_64 ]] && system_bits="64-bit" || system_bits="32-bit"
@@ -88,6 +89,40 @@ if [[ $platform == "Linux" ]]; then
     * )
       echo "export LD_LIBRARY_PATH=${PYENV_PREVIOUS_LD_LIBRARY_PATH}"
       echo "unset PYENV_PREVIOUS_LD_LIBRARY_PATH"
+      ;;
+    esac
+  fi
+elif [[ $platform == "Darwin" ]]; then
+  system_arch=$(uname -m 2>/dev/null)
+  [[ $system_arch == x86_64 ]] && system_bits="64-bit" || system_bits="32-bit"
+  python_bits=$(file -L `pyenv prefix`/bin/python | grep -oE "(32|64)-bit" 2>/dev/null)
+  #echo "SYSTEM: $system_arch, SYSTEM_BITS, $system_bits, PYTHON: $python_bits" >&2
+
+  # architectures differ, we are going to need an LD_LIBRARY_PATH
+  if [[ "$system_bits" != "$python_bits" ]]; then
+    # only update the *LIBRARY_PATH variables if they do not already have the
+    # necessary paths
+    if [[ ${DYLD_FRAMEWORK_PATH#*$(pyenv prefix)} == ${DYLD_FRAMEWORK_PATH} ]]; then
+      case "$shell" in
+      fish )
+        echo "setenv PYENV_PREVIOUS_DYLD_FRAMEWORK_PATH=${DYLD_FRAMEWORK_PATH}"
+        echo "setenv DYLD_FRAMEWORK_PATH=$(pyenv prefix):${DYLD_FRAMEWORK_PATH}"
+        ;;
+      *)
+        echo "export PYENV_PREVIOUS_DYLD_FRAMEWORK_PATH=${DYLD_FRAMEWORK_PATH}"
+        echo "export DYLD_FRAMEWORK_PATH=$(pyenv prefix):${DYLD_FRAMEWORK_PATH}"
+        ;;
+      esac
+    fi
+  elif [[ -n "${DYLD_FRAMEWORK_PATH}" ]]; then
+    case "$shell" in
+    fish )
+      echo "setenv DYLD_FRAMEWORK_PATH=${PYENV_PREVIOUS_DYLD_FRAMEWORK_PATH}"
+      echo "set -e PYENV_PREVIOUS_DYLD_FRAMEWORK_PATH"
+      ;;
+    * )
+      echo "export DYLD_FRAMEWORK_PATH=${PYENV_PREVIOUS_DYLD_FRAMEWORK_PATH}"
+      echo "unset PYENV_PREVIOUS_DYLD_FRAMEWORK_PATH"
       ;;
     esac
   fi
